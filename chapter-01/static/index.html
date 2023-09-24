@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>图片超分辨率服务</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/spectre.css/0.5.9/spectre.min.css"
+    integrity="sha512-9RIcp1f4CE6dEuYX9085tXaEbYd1ap04d2Av1ub/dwuT33WbfbHStDdQ+shKrp5wzZzleh5DOg+7ABSnaQP/nQ=="
+    crossorigin="anonymous" referrerpolicy="no-referrer" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/spectre.css/0.5.9/spectre-icons.min.css"
+    integrity="sha512-p/19UB+ls7zsYqyFt0S+qh0P05ThDxzQSwtY4Jo01M4OG1ZkiEMHE942OZ4wh86sT5BIrFNhY3aLsQ5pTqVIzg=="
+    crossorigin="anonymous" referrerpolicy="no-referrer" />
+  <style>
+    .navbar {
+      opacity: 86%;
+      padding: .5rem;
+      position: fixed;
+      top: 0;
+      width: 100%;
+      z-index: 900;
+      filter: drop-shadow(0 0 .5rem rgba(0, 0, 0, .5));
+      overflow: visible;
+    }
+
+    main {
+      min-height: 100vh;
+      padding: 4rem 2rem;
+    }
+
+    .hidden {
+      display: none;
+    }
+
+    .toast {
+      position: fixed;
+      box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, .15);
+      top: 1rem;
+      right: 0;
+      left: 0;
+      margin: 0 auto;
+      max-width: 20rem;
+      z-index: 1000;
+      opacity: 0;
+      transition: opacity .3s ease-in-out;
+    }
+
+    .toast.active {
+      opacity: 1;
+    }
+
+    #image,
+    #res-image {
+      max-width: 40vw;
+      max-height: 40vh;
+      border: 0;
+      box-shadow: 0 1rem 2rem rgba(0, 0, 0, .15);
+      display: flex;
+      margin: 0 auto;
+    }
+
+    #image-details,
+    #res-image-details {
+      max-width: 20rem;
+      margin: 0 auto;
+      margin-top: 1rem;
+    }
+  </style>
+</head>
+
+<body>
+  <header class="navbar bg-dark">
+    <section class="navbar-section">
+      01-图片超分辨率
+    </section>
+    <section class="navbar-section">
+      <label class="form-switch">
+        <input type="checkbox" onchange="toggleDarkMode()" />
+        <i class="form-icon"></i> 夜间模式
+      </label>
+    </section>
+  </header>
+
+  <div class="toast toast-error hidden">
+    <button class="btn btn-clear float-right" onclick="closeError()"></button>
+    <div id="error-message"></div>
+  </div>
+
+  <main>
+    <input class="hidden" type="file" id="file" onchange="fileChanged()" />
+    <div class="empty">
+      <div id="not-upload">
+        <div class="empty-icon">
+          <i class="icon icon-4x icon-photo"></i>
+        </div>
+        <p class="empty-title h5">你还没有上传图片</p>
+        <p class="empty-subtitle">点击选择图片，然后上传即可查看图片的放大效果</p>
+      </div>
+      <div id="has-upload" class="hidden">
+        <img id="image" src="" alt="上传图片" />
+        <div id="image-details"></div>
+      </div>
+      <div id="loading" class="hidden loading loading-lg"></div>
+      <div class="empty-action">
+        <button class="btn btn-primary" onclick="selectImage()">选择图片</button>
+        <button class="btn btn-success" onclick="uploadImage()">上传放大</button>
+      </div>
+    </div>
+  </main>
+
+  <div class="modal" id="modal-id">
+    <a class="modal-overlay" aria-label="Close"></a>
+    <div class="modal-container">
+      <div class="modal-header">
+        <a onclick="toggleModal(false)" class="btn btn-clear float-right" aria-label="Close"></a>
+        <div class="modal-title h5">Modal title</div>
+      </div>
+      <div class="modal-body">
+        <div class="content">
+          <img src="" id="res-image" alt="结果图片">
+          <div id="res-image-details"></div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn" onclick="toggleModal(false)">取消任务</button>
+        <button class="btn btn-success" onclick="saveImage()">保存图片</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    var closeErrorTimer = null
+    /**
+     * 切换夜间模式
+     */
+    function toggleDarkMode() {
+      const body = document.body;
+      if (body.classList.contains('bg-dark')) {
+        body.classList.remove('bg-dark')
+        document.querySelector('.empty').classList.remove('bg-dark')
+      } else {
+        body.classList.add('bg-dark')
+        document.querySelector('.empty').classList.add('bg-dark')
+      }
+    }
+
+    /**
+     * 选择图片
+     */
+    function selectImage() {
+      document.getElementById('file').click()
+    }
+
+    /**
+     * 图片改变时触发
+     */
+    function fileChanged() {
+      const files = document.getElementById('file').files
+      if (files.length === 0) {
+        document.getElementById('not-upload').classList.remove('hidden')
+        document.getElementById('has-upload').classList.add('hidden')
+        return
+      }
+      document.getElementById('loading').classList.remove('hidden')
+      const file = files[0]
+      const reader = new FileReader()
+      const image = document.getElementById('image')
+      reader.readAsDataURL(file)
+      reader.onload = function () {
+        image.src = reader.result
+        image.onload = function () {
+          document.getElementById('not-upload').classList.add('hidden')
+          document.getElementById('has-upload').classList.remove('hidden')
+          document.getElementById('loading').classList.add('hidden')
+          document.getElementById('image-details').innerHTML = `
+            <p class="text-ellipsis">图片名称：${file.name}</p>
+            <p class="text-ellipsis">图片大小：${file.size / 1024}KB</p>
+            <p class="text-ellipsis">图片尺寸：${image.naturalWidth}x${image.naturalHeight}</p>
+          `
+        }
+      }
+    }
+
+    /**
+     * 打开/关闭模态框
+     * @param {boolean} open 是否打开
+     */
+    function toggleModal(open) {
+      const modal = document.getElementById('modal-id')
+      if (!open) {
+        modal.classList.remove('active')
+      } else {
+        modal.classList.add('active')
+      }
+    }
+
+    /**
+     * 上传图片
+     */
+    function uploadImage() {
+      const files = document.getElementById('file').files
+      if (files.length === 0) {
+        showError('请选择图片')
+        return
+      }
+      document.getElementById('loading').classList.remove('hidden')
+      const formData = new FormData()
+      formData.append('file', files[0])
+      fetch('/api/super-resolution', {
+        method: 'POST',
+        body: formData,
+      }).then(response => {
+        document.getElementById('loading').classList.add('hidden')
+        if (response.status !== 200) {
+          showError('上传失败')
+          return
+        }
+        return response.blob()
+      }).then(blob => {
+        toggleModal(true)
+        const image = document.getElementById('res-image')
+        image.src = URL.createObjectURL(blob)
+        image.onload = function () {
+          document.getElementById('res-image-details').innerHTML = `
+            <p class="text-ellipsis">图片名称：${files[0].name}</p>
+            <p class="text-ellipsis">图片大小：${files[0].size / 1024}KB</p>
+            <p class="text-ellipsis">图片尺寸：${image.naturalWidth}x${image.naturalHeight}</p>
+          `
+        }
+      }).catch(error => {
+        showError('上传失败')
+      })
+    }
+
+    /**
+     * 显示错误信息
+     * @param {string} message 错误信息
+     */
+    function showError(message) {
+      if (closeErrorTimer) {
+        clearTimeout(closeErrorTimer)
+      }
+      const toast = document.querySelector('.toast-error')
+      toast.classList.remove('hidden')
+      toast.classList.add('active')
+      document.getElementById('error-message').innerText = message
+      closeErrorTimer = setTimeout(() => {
+        closeError()
+      }, 3000)
+    }
+
+    /**
+     * 关闭错误信息
+     */
+    function closeError() {
+      const toast = document.querySelector('.toast-error')
+      toast.classList.remove('active')
+      setTimeout(() => {
+        toast.classList.add('hidden')
+      }, 300)
+    }
+
+    /**
+     * 保存图片
+     */
+    function saveImage() {
+      const image = document.getElementById('res-image')
+      const a = document.createElement('a')
+      a.href = image.src
+      a.download = 'result.png'
+      a.click()
+    }
+  </script>
+</body>
+
+</html>
