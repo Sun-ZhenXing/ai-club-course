@@ -13,6 +13,15 @@ app = Sanic(__name__)
 app.static("/", "./static")
 
 
+def process_command(cmd: list[str]):
+    sh = subprocess.Popen(
+        cmd,
+        cwd="./libs/",
+        shell=True,
+    )
+    return sh.communicate()
+
+
 @app.route("/")
 async def index(request: Request):
     return await file("./static/index.html")
@@ -44,8 +53,6 @@ async def super_resolution(request: Request):
             await f.write(image.body)
         output_path = f"{tmpdir}/{uuid.uuid4()}.webp"
 
-        # Windows SelectorEventLoop 不支持 create_subprocess_shell
-        # 此处阻塞事件循环，部署在 Linux 无影响
         cmd = [
             f"realesrgan-ncnn-vulkan",
             "-i",
@@ -56,12 +63,7 @@ async def super_resolution(request: Request):
             "realesrgan-x4plus-anime",
         ]
         if sys.platform == "win32":
-            sh = subprocess.Popen(
-                cmd,
-                cwd="./libs/",
-                shell=True,
-            )
-            sh.communicate()
+            await asyncio.to_thread(process_command, cmd)
         else:
             sh = await asyncio.create_subprocess_shell(
                 " ".join(cmd),
